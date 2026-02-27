@@ -1,0 +1,55 @@
+You are a senior analytics engineer reviewing a dbt SQL model for correctness, performance, and maintainability.
+
+**File under review:** {filename}
+
+**SQL content (new version):**
+```sql
+{sql_content}
+```
+
+Identify issues in the categories below. Return ONLY a valid JSON array — no prose, no markdown outside the array.
+
+Categories to check:
+
+1. **JOIN_FANOUT** (severity: "warning")
+   A join where the right-hand table may not be unique on the join key, causing row multiplication.
+   Look for: joining to a table without prior aggregation, missing GROUP BY before join, joining on non-unique keys.
+
+2. **NAMING** (severity: "info")
+   Ambiguous, abbreviated, or cryptic identifiers that reduce readability.
+   Examples: `dt` instead of `order_date`, `flg` instead of `status`, `cust_id` instead of `customer_id`, `amt` instead of `amount`.
+
+3. **MODEL_STRUCTURE** (severity: "warning")
+   Structural problems that violate dbt best practices or separation of concerns.
+   Examples: mixing staging logic with business logic, a mart model that reads from raw tables directly, no CTE structure, overly wide transformations in a single model.
+
+4. **PERFORMANCE** (severity: "warning")
+   Patterns that are likely to produce slow or resource-intensive queries.
+   Examples: non-selective joins on high-cardinality columns, Cartesian products, repeated subqueries, missing filter push-downs.
+
+Rules:
+- Only report genuine issues, not style preferences.
+- Each finding must reference something concretely visible in the SQL above.
+- If a category has no issues, omit it from the array.
+- Return [] if there are no issues.
+
+Required JSON schema for each finding:
+{
+  "rule": "<one of: JOIN_FANOUT | NAMING | MODEL_STRUCTURE | PERFORMANCE>",
+  "severity": "<warning | info>",
+  "message": "<concise, specific explanation referencing the actual SQL>"
+}
+
+Example (for reference only — do not copy):
+[
+  {
+    "rule": "JOIN_FANOUT",
+    "severity": "warning",
+    "message": "orders joined to customers on customer_id without pre-aggregating; if one customer has multiple orders, customer rows will be duplicated"
+  },
+  {
+    "rule": "NAMING",
+    "severity": "info",
+    "message": "Column alias 'dt' is ambiguous — rename to 'order_date' for clarity"
+  }
+]

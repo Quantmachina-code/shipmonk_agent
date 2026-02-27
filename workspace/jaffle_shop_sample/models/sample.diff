@@ -1,0 +1,121 @@
+diff --git a/models/staging/stg_customers.sql b/models/staging/stg_customers.sql
+index a1b2c3d..d4e5f6a 100644
+--- a/models/staging/stg_customers.sql
++++ b/models/staging/stg_customers.sql
+@@ -1,16 +1,11 @@
+ with source as (
+
+-    select * from {{ source('jaffle_shop', 'customers') }}
++    select * from prod.customers
+
+ ),
+
+ renamed as (
+
+-    select
+-        id            as customer_id,
+-        first_name,
+-        last_name
+-
+-    from source
++    select *
++    from source
+
+ )
+
+diff --git a/models/staging/stg_orders.sql b/models/staging/stg_orders.sql
+index b2c3d4e..e5f6a7b 100644
+--- a/models/staging/stg_orders.sql
++++ b/models/staging/stg_orders.sql
+@@ -1,18 +1,18 @@
+ with source as (
+
+-    select * from {{ source('jaffle_shop', 'orders') }}
++    select * from prod.orders
+
+ ),
+
+ renamed as (
+
+     select
+         id            as order_id,
+-        user_id       as customer_id,
+-        order_date,
+-        status,
++        user_id       as cust_id,
++        order_date    as dt,
++        status        as flg,
+         amount
+
+     from source
+diff --git a/models/marts/customers.sql b/models/marts/customers.sql
+index c3d4e5f..f6a7b8c 100644
+--- a/models/marts/customers.sql
++++ b/models/marts/customers.sql
+@@ -1,24 +1,12 @@
+-with customers as (
++with customers as (
+
+-    select * from {{ ref('stg_customers') }}
++    select * from prod.customers
+
+ ),
+
+ orders as (
+
+-    select
+-        customer_id,
+-        count(*)      as number_of_orders,
+-        sum(amount)   as total_amount
+-
+-    from {{ ref('stg_orders') }}
+-
+-    group by 1
++    select * from prod.orders
+
+ )
+
+-select
+-    customers.customer_id,
+-    customers.first_name,
+-    customers.last_name,
+-    orders.number_of_orders,
+-    orders.total_amount
+-
+-from customers
+-left join orders on customers.customer_id = orders.customer_id
++select *
++from customers
++left join orders on customers.customer_id = orders.customer_id
+diff --git a/models/marts/orders.sql b/models/marts/orders.sql
+index d4e5f6a..a7b8c9d 100644
+--- a/models/marts/orders.sql
++++ b/models/marts/orders.sql
+@@ -1,22 +1,6 @@
+-with orders as (
+-
+-    select * from {{ ref('stg_orders') }}
+-
+-),
+-
+-payments as (
+-
+-    select * from {{ ref('stg_payments') }}
+-
+-)
+-
+-select
+-    orders.order_id,
+-    orders.customer_id,
+-    orders.order_date,
+-    orders.status,
+-    payments.payment_method,
+-    payments.amount
+-
+-from orders
+-left join payments on orders.order_id = payments.order_id
++select *
++from prod.orders o
++join prod.customers c on o.customer_id = c.id
++join prod.payments p on o.id = p.order_id
++join prod.order_items oi on o.id = oi.order_id
