@@ -1,12 +1,13 @@
-"""Claude-powered semantic analysis of changed dbt models."""
+"""AI-powered semantic analysis of changed dbt models.
+
+Supports both Anthropic (Claude) and OpenAI (GPT) as providers.
+"""
 
 import json
 import os
 import re
 from pathlib import Path
 from typing import List, Optional
-
-import anthropic
 
 from .deterministic import Finding
 from .diff_parser import FileDiff
@@ -26,7 +27,6 @@ def _extract_json(text: str) -> str:
     fence = _JSON_FENCE_RE.search(text)
     if fence:
         return fence.group(1).strip()
-    # Try to find a raw JSON array
     start = text.find("[")
     end = text.rfind("]")
     if start != -1 and end != -1:
@@ -34,44 +34,87 @@ def _extract_json(text: str) -> str:
     return text.strip()
 
 
+def _call_anthropic(client, model: str, prompt: str) -> str:
+    response = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text
+
+
+def _call_openai(client, model: str, prompt: str) -> str:
+    response = client.chat.completions.create(
+        model=model,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content
+
+
 def run_semantic_checks(
     file_diffs: List[FileDiff],
     api_key: Optional[str] = None,
-    model: str = "claude-haiku-4-5-20251001",
+    model: Optional[str] = None,
+    provider: str = "anthropic",
 ) -> List[Finding]:
-    """Send each changed SQL file to Claude and parse structured findings.
+    """Send each changed SQL file to an AI model and parse structured findings.
 
-    Returns an empty list if ANTHROPIC_API_KEY is not set.
+    Supports provider='anthropic' (Claude) or provider='openai' (GPT).
+    Returns an empty list if the required API key is not set.
     """
-    resolved_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    provider = provider.lower()
+
+    if provider == "openai":
+        resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
+        default_model = "gpt-4o-mini"
+        env_var = "OPENAI_API_KEY"
+    else:
+        resolved_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        default_model = "claude-haiku-4-5-20251001"
+        env_var = "ANTHROPIC_API_KEY"
+
+    effective_model = model or default_model
+
     if not resolved_key:
         print(
-            "Warning: ANTHROPIC_API_KEY not set — skipping semantic checks. "
-            "Set the env var or pass --api-key to enable AI analysis."
+            f"Warning: {env_var} not set — skipping semantic checks. "
+            f"Set the env var or pass --api-key to enable AI analysis."
         )
         return []
 
-    client = anthropic.Anthropic(api_key=resolved_key)
-    prompt_template = _load_prompt()
+    if provider == "openai":
+        try:
+            from openai import OpenAI, OpenAIError
+        except ImportError:
+            print("Warning: openai package not installed. Run: pip install openai")
+            return []
+        client = OpenAI(api_key=resolved_key)
+        call_fn = _call_openai
+        api_error = OpenAIError
+    else:
+        try:
+            import anthropic
+        except ImportError:
+            print("Warning: anthropic package not installed. Run: pip install anthropic")
+            return []
+        client = anthropic.Anthropic(api_key=resolved_key)
+        call_fn = _call_anthropic
+        api_error = anthropic.APIError
 
+    prompt_template = _load_prompt()
     findings: List[Finding] = []
 
     for fd in file_diffs:
         if not fd.new_content.strip():
             continue
 
-        # Simple placeholder substitution — avoids issues with {{ }} in SQL
         prompt = prompt_template.replace("{filename}", fd.filename).replace(
             "{sql_content}", fd.new_content
         )
 
         try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = response.content[0].text
+            raw = call_fn(client, effective_model, prompt)
             json_text = _extract_json(raw)
             raw_findings = json.loads(json_text)
 
@@ -91,8 +134,8 @@ def run_semantic_checks(
                 )
 
         except json.JSONDecodeError as exc:
-            print(f"Warning: Could not parse Claude response for {fd.filename}: {exc}")
-        except anthropic.APIError as exc:
-            print(f"Warning: Anthropic API error for {fd.filename}: {exc}")
+            print(f"Warning: Could not parse AI response for {fd.filename}: {exc}")
+        except api_error as exc:
+            print(f"Warning: {provider.capitalize()} API error for {fd.filename}: {exc}")
 
     return findings

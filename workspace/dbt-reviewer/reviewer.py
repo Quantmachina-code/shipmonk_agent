@@ -47,15 +47,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip AI-powered semantic checks (deterministic rules only).",
     )
     parser.add_argument(
+        "--provider",
+        metavar="PROVIDER",
+        default="anthropic",
+        choices=["anthropic", "openai"],
+        help="AI provider for semantic checks: 'anthropic' (default) or 'openai'.",
+    )
+    parser.add_argument(
         "--api-key",
         metavar="KEY",
-        help="Anthropic API key. Defaults to ANTHROPIC_API_KEY environment variable.",
+        help="API key for the chosen provider. Defaults to ANTHROPIC_API_KEY or OPENAI_API_KEY env var.",
     )
     parser.add_argument(
         "--model",
         metavar="MODEL",
-        default="claude-haiku-4-5-20251001",
-        help="Claude model to use for semantic checks (default: claude-haiku-4-5-20251001).",
+        default=None,
+        help=(
+            "Model to use for semantic checks. "
+            "Defaults: anthropic=claude-haiku-4-5-20251001, openai=gpt-4o-mini."
+        ),
     )
     return parser
 
@@ -107,6 +117,7 @@ def main() -> None:
             file_diffs,
             api_key=args.api_key,
             model=args.model,
+            provider=args.provider,
         )
         all_findings.extend(semantic)
 
