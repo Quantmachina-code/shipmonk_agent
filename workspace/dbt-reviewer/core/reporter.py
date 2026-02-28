@@ -48,7 +48,10 @@ def format_report(file_diffs: List[FileDiff], findings: List[Finding]) -> str:
             lines.append(f"  File    : {finding.file}")
             if finding.line:
                 snippet = finding.line[:80] + ("…" if len(finding.line) > 80 else "")
-                lines.append(f"  Line    : {snippet}")
+                line_label = (
+                    f"Line {finding.line_number}" if finding.line_number is not None else "Line"
+                )
+                lines.append(f"  {line_label:<9}: {snippet}")
             lines.append(f"  Message : {finding.message}")
             lines.append("")
 

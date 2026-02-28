@@ -14,6 +14,7 @@ class Finding:
     file: str
     message: str
     line: Optional[str] = None
+    line_number: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +38,7 @@ _DBT_MODEL_BARE_RE = re.compile(
 def check_select_star(file_diff: FileDiff) -> List[Finding]:
     findings: List[Finding] = []
     seen: set[str] = set()
-    for line in file_diff.added_lines:
+    for idx, line in enumerate(file_diff.added_lines):
         stripped = line.strip()
         if stripped in seen:
             continue
@@ -50,6 +51,7 @@ def check_select_star(file_diff: FileDiff) -> List[Finding]:
                     file=file_diff.filename,
                     message="SELECT * detected — enumerate columns explicitly to avoid schema drift",
                     line=stripped,
+                    line_number=file_diff.added_line_numbers[idx],
                 )
             )
     return findings
@@ -59,7 +61,7 @@ def check_hardcoded_schema(file_diff: FileDiff) -> List[Finding]:
     """Flag schema.table references inside FROM / JOIN that are not wrapped in Jinja."""
     findings: List[Finding] = []
     seen: set[str] = set()
-    for line in file_diff.added_lines:
+    for idx, line in enumerate(file_diff.added_lines):
         stripped = line.strip()
         if stripped in seen:
             continue
@@ -81,6 +83,7 @@ def check_hardcoded_schema(file_diff: FileDiff) -> List[Finding]:
                         "use {{ ref() }} for dbt models or {{ source() }} for raw tables"
                     ),
                     line=stripped,
+                    line_number=file_diff.added_line_numbers[idx],
                 )
             )
     return findings
@@ -90,7 +93,7 @@ def check_missing_ref(file_diff: FileDiff) -> List[Finding]:
     """Flag dbt model names used directly in FROM/JOIN without ref()."""
     findings: List[Finding] = []
     seen: set[str] = set()
-    for line in file_diff.added_lines:
+    for idx, line in enumerate(file_diff.added_lines):
         stripped = line.strip()
         if stripped in seen:
             continue
@@ -110,6 +113,7 @@ def check_missing_ref(file_diff: FileDiff) -> List[Finding]:
                         f"use {{{{ ref('{name}') }}}} to track lineage"
                     ),
                     line=stripped,
+                    line_number=file_diff.added_line_numbers[idx],
                 )
             )
     return findings
